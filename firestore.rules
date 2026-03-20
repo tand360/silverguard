@@ -1,0 +1,180 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - displayName: string (required)
+    //   - email: string (required)
+    //   - role: string (required, enum: elder, caregiver)
+    //   - photoURL: string (optional)
+    //   - caregiverId: string (optional)
+    //   - elderIds: list (optional)
+    //   - safeZone: map (optional)
+    //
+    // Collection: medications
+    // Document ID: {medId}
+    // Fields:
+    //   - userId: string (required)
+    //   - name: string (required)
+    //   - dosage: string (required)
+    //   - time: string (required)
+    //   - taken: bool (required)
+    //   - lastTaken: string (optional)
+    //
+    // Collection: health_logs
+    // Document ID: {logId}
+    // Fields:
+    //   - userId: string (required)
+    //   - mood: string (required)
+    //   - notes: string (required)
+    //   - timestamp: string (required)
+    //
+    // Collection: alerts
+    // Document ID: {alertId}
+    // Fields:
+    //   - userId: string (required)
+    //   - type: string (required)
+    //   - message: string (required)
+    //   - timestamp: string (required)
+    //   - resolved: bool (required)
+    //
+    // Collection: emergency_contacts
+    // Document ID: {contactId}
+    // Fields:
+    //   - userId: string (required)
+    //   - name: string (required)
+    //   - relation: string (required)
+    //   - phone: string (required)
+    //   - isPrimary: bool (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "nazarov.sherzod.4343@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isCaregiverOf(elderId) {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('elderIds', []).hasAny([elderId]) ||
+         get(/databases/$(database)/documents/users/$(elderId)).data.get('caregiverId', null) == request.auth.uid);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is string && ts.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() > 0 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['elder', 'caregiver'];
+    }
+
+    function isValidMedication(data) {
+      return data.userId is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.dosage is string && data.dosage.size() > 0 &&
+             data.time is string && data.time.matches("^\\d{2}:\\d{2}$") &&
+             data.taken is bool;
+    }
+
+    function isValidHealthLog(data) {
+      return data.userId is string &&
+             data.mood in ['great', 'good', 'okay', 'bad', 'critical'] &&
+             data.notes is string && data.notes.size() < 2000 &&
+             isValidTimestamp(data.timestamp);
+    }
+
+    function isValidAlert(data) {
+      return data.userId is string &&
+             data.type in ['SOS', 'HEART_RATE', 'BLOOD_PRESSURE', 'FALL', 'GEOFENCE'] &&
+             data.message is string && data.message.size() < 500 &&
+             isValidTimestamp(data.timestamp) &&
+             data.resolved is bool;
+    }
+
+    function isValidContact(data) {
+      return data.userId is string &&
+             data.name is string && data.name.size() > 0 &&
+             data.relation is string &&
+             data.phone is string && data.phone.size() > 5 &&
+             data.isPrimary is bool;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isCaregiverOf(uid) || isAdmin();
+      allow create: if isOwner(uid) && isValidUser(request.resource.data);
+      allow update: if (isOwner(uid) || isCaregiverOf(uid)) && request.resource.data.role == resource.data.role;
+    }
+
+    match /messages/{msgId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.senderId) || isOwner(resource.data.receiverId));
+      allow create: if isAuthenticated() && isOwner(request.resource.data.senderId) && 
+                      (isCaregiverOf(request.resource.data.receiverId) || 
+                       get(/databases/$(database)/documents/users/$(request.resource.data.receiverId)).data.get('caregiverId', null) == request.auth.uid);
+    }
+
+    match /medications/{medId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isCaregiverOf(resource.data.userId));
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidMedication(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.userId) || isCaregiverOf(resource.data.userId)) && isValidMedication(request.resource.data);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    match /health_logs/{logId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isCaregiverOf(resource.data.userId));
+      allow create: if isAuthenticated() && (isOwner(request.resource.data.userId) || isCaregiverOf(request.resource.data.userId)) && isValidHealthLog(request.resource.data);
+      allow update: if isAuthenticated() && isCaregiverOf(resource.data.userId) && isValidHealthLog(request.resource.data);
+      allow delete: if isAuthenticated() && isCaregiverOf(resource.data.userId);
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isCaregiverOf(resource.data.userId));
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidAlert(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(resource.data.userId) || isCaregiverOf(resource.data.userId)) && isValidAlert(request.resource.data);
+    }
+
+    match /emergency_contacts/{contactId} {
+      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isCaregiverOf(resource.data.userId));
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId) && isValidContact(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(resource.data.userId) && isValidContact(request.resource.data);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

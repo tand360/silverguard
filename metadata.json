@@ -1,0 +1,7 @@
+{
+  "name": "SilverGuard",
+  "description": "A professional-grade mobile and IoT ecosystem designed to bridge the digital gap for the elderly while ensuring their safety and health monitoring.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

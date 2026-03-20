@@ -1,0 +1,139 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information for elders and caregivers.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Full name" },
+        "email": { "type": "string", "description": "Email address" },
+        "role": { "type": "string", "enum": ["elder", "caregiver"], "description": "User role" },
+        "photoURL": { "type": "string", "description": "Profile picture URL" },
+        "caregiverId": { "type": "string", "description": "UID of the assigned caregiver (for elders)" },
+        "elderIds": { "type": "array", "items": { "type": "string" }, "description": "UIDs of the assigned elders (for caregivers)" },
+        "currentLocation": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "vitals": {
+          "type": "object",
+          "properties": {
+            "heartRate": { "type": "number" },
+            "bloodPressure": { "type": "string" },
+            "temperature": { "type": "number" },
+            "lastUpdated": { "type": "string", "format": "date-time" }
+          }
+        },
+        "safeZone": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" },
+            "radius": { "type": "number", "description": "Radius in meters" }
+          }
+        }
+      },
+      "required": ["uid", "displayName", "email", "role"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Secure chat messages between elder and caregiver.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "receiverId": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "receiverId", "text", "timestamp"]
+    },
+    "Medication": {
+      "title": "Medication",
+      "description": "Stores medication reminders and adherence data.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Elder's UID" },
+        "name": { "type": "string" },
+        "dosage": { "type": "string" },
+        "time": { "type": "string", "description": "HH:mm format" },
+        "taken": { "type": "boolean" },
+        "lastTaken": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "dosage", "time"]
+    },
+    "HealthLog": {
+      "title": "Health Log",
+      "description": "Daily health notes and mood tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Elder's UID" },
+        "mood": { "type": "string", "enum": ["great", "good", "okay", "bad", "critical"] },
+        "notes": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "mood", "timestamp"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "System generated alerts for biometrics or geofencing.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Elder's UID" },
+        "type": { "type": "string", "enum": ["HEART_RATE", "SOS", "GEOFENCE", "FALL"] },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "resolved": { "type": "boolean" }
+      },
+      "required": ["userId", "type", "message", "timestamp"]
+    },
+    "EmergencyContact": {
+      "title": "Emergency Contact",
+      "description": "Contacts for emergency situations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string", "description": "Elder's UID" },
+        "name": { "type": "string" },
+        "relation": { "type": "string" },
+        "phone": { "type": "string" },
+        "isPrimary": { "type": "boolean" }
+      },
+      "required": ["userId", "name", "relation", "phone"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profiles"
+    },
+    "/medications/{medId}": {
+      "schema": "Medication",
+      "description": "Medication tracking"
+    },
+    "/health_logs/{logId}": {
+      "schema": "HealthLog",
+      "description": "Daily health logs"
+    },
+    "/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "System alerts"
+    },
+    "/emergency_contacts/{contactId}": {
+      "schema": "EmergencyContact",
+      "description": "Emergency contacts"
+    },
+    "/messages/{msgId}": {
+      "schema": "Message",
+      "description": "Chat messages"
+    }
+  }
+}
